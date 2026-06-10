@@ -1,0 +1,57 @@
+services:
+  postgres:
+    build:
+      context: ./docker/postgres
+    hostname: postgres
+    container_name: msp_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_DB=msp_archive
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d msp_archive"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    hostname: backend
+    container_name: msp_backend
+    restart: always
+    volumes:
+      - .:/app
+      - shared_uploads:/app/uploads
+    ports:
+      - "0.0.0.0:8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres/msp_archive
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+      - SECRET_KEY=${SECRET_KEY}
+      - FIRST_ADMIN_EMAIL=${FIRST_ADMIN_EMAIL}
+      - FIRST_ADMIN_PASSWORD=${FIRST_ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+    hostname: frontend
+    container_name: msp_frontend
+    ports:
+      - "0.0.0.0:3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  shared_uploads:
